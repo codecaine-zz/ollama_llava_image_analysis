@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Purpose Image Analysis App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #result,
+        #modelList {
+            margin-top: 20px;
+        }
+
+        #result {
+            white-space: pre-wrap;
+        }
+
+        #videoContainer,
+        #capturedImageContainer {
+            margin-top: 20px;
+            max-width: 100%;
+            text-align: center;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        select,
+        button,
+        input {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        #savedQueriesContainer {
+            margin-top: 10px;
+        }
+
+        #savedQueries {
+            width: 200px;
+        }
+
+        #capturedImage {
+            max-width: 100%;
+            height: auto;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Multi-Purpose Image Analysis App</h1>
+    <select id="modelSelect">
+        <option value="">Loading models...</option>
+    </select>
+    <select id="taskSelect">
+        <option value="general">General Description</option>
+        <option value="objects">Object Detection</option>
+        <option value="people">People Count</option>
+        <option value="faces">Face Detection</option>
+        <option value="text">Text Recognition (OCR)</option>
+        <option value="animals">Animal Identification</option>
+        <option value="landmarks">Landmark Recognition</option>
+        <option value="colors">Color Analysis</option>
+        <option value="brand">Brand/Logo Detection</option>
+        <option value="emotions">Emotion Recognition</option>
+        <option value="food">Food Detection</option>
+        <option value="vehicle">Vehicle Identification</option>
+        <option value="custom">Custom Query</option>
+    </select>
+    <div id="customQueryContainer" style="display:none;">
+        <input type="text" id="customQuery" placeholder="Enter custom query here">
+        <button id="saveQuery">Save Query</button>
+        <div id="savedQueriesContainer">
+            <select id="savedQueries">
+                <option value="">Select a saved query</option>
+            </select>
+            <button id="editQuery">Edit</button>
+            <button id="deleteQuery">Delete</button>
+        </div>
+    </div>
+    <input type="file" id="imageInput" accept="image/*">
+    <button id="webcamButton">Use Webcam</button>
+    <button id="analyzeButton">Analyze Image</button>
+    <div id="videoContainer">
+        <video id="video" width="640" height="480" style="display:none;"></video>
+        <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+    </div>
+    <div id="capturedImageContainer">
+        <img id="capturedImage" alt="Captured Image">
+    </div>
+    <div id="status"></div>
+    <div id="result"></div>
+
+    <script>
+        const modelSelect = document.getElementById('modelSelect');
+        const taskSelect = document.getElementById('taskSelect');
+        const customQueryContainer = document.getElementById('customQueryContainer');
+        const customQuery = document.getElementById('customQuery');
+        const saveQueryButton = document.getElementById('saveQuery');
+        const savedQueriesSelect = document.getElementById('savedQueries');
+        const editQueryButton = document.getElementById('editQuery');
+        const deleteQueryButton = document.getElementById('deleteQuery');
+        const imageInput = document.getElementById('imageInput');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const webcamButton = document.getElementById('webcamButton');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const capturedImage = document.getElementById('capturedImage');
+        const resultDiv = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
+
+        let isUsingWebcam = false;
+        let stream = null;
+
+        analyzeButton.addEventListener('click', analyzeImage);
+        webcamButton.addEventListener('click', toggleWebcam);
+        taskSelect.addEventListener('change', toggleCustomQuery);
+        saveQueryButton.addEventListener('click', saveCustomQuery);
+        savedQueriesSelect.addEventListener('change', loadSavedQuery);
+        editQueryButton.addEventListener('click', editSavedQuery);
+        deleteQueryButton.addEventListener('click', deleteSavedQuery);
+
+        function toggleCustomQuery() {
+            customQueryContainer.style.display = taskSelect.value === 'custom' ? 'block' : 'none';
+            if (taskSelect.value === 'custom') {
+                loadSavedQueries();
+            }
+        }
+
+        function saveCustomQuery() {
+            const query = customQuery.value.trim();
+            if (query) {
+                let savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+                savedQueries.push(query);
+                localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
+                loadSavedQueries();
+                customQuery.value = '';
+            }
+        }
+
+        function loadSavedQueries() {
+            const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+            savedQueriesSelect.innerHTML = '<option value="">Select a saved query</option>' +
+                savedQueries.map((query, index) => `<option value="${index}">${query.substring(0, 30)}${query.length > 30 ? '...' : ''}</option>`).join('');
+        }
+
+        function loadSavedQuery() {
+            const selectedIndex = savedQueriesSelect.value;
+            if (selectedIndex !== '') {
+                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+                customQuery.value = savedQueries[selectedIndex];
+            }
+        }
+
+        function editSavedQuery() {
+            const selectedIndex = savedQueriesSelect.value;
+            if (selectedIndex !== '') {
+                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+                const updatedQuery = prompt('Edit your query:', savedQueries[selectedIndex]);
+                if (updatedQuery !== null) {
+                    savedQueries[selectedIndex] = updatedQuery;
+                    localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
+                    loadSavedQueries();
+                    customQuery.value = updatedQuery;
+                }
+            }
+        }
+
+        function deleteSavedQuery() {
+            const selectedIndex = savedQueriesSelect.value;
+            if (selectedIndex !== '') {
+                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
+                savedQueries.splice(selectedIndex, 1);
+                localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
+                loadSavedQueries();
+                customQuery.value = '';
+            }
+        }
+
+        // Fetch available LLaVA models
+        async function fetchModels() {
+            try {
+                const response = await fetch('http://localhost:11434/api/tags');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const llavaModels = data.models.filter(model => model.name.toLowerCase().includes('llava'));
+
+                modelSelect.innerHTML = llavaModels.length > 0
+                    ? llavaModels.map(model => `<option value="${model.name}">${model.name}</option>`).join('')
+                    : '<option value="">No LLaVA models found</option>';
+
+                if (llavaModels.length === 0) {
+                    analyzeButton.disabled = true;
+                    statusDiv.textContent = "No LLaVA models available. Please install a LLaVA model to use this app.";
+                }
+            } catch (error) {
+                console.error('Error fetching models:', error);
+                modelSelect.innerHTML = '<option value="">Error loading models</option>';
+                statusDiv.textContent = "Error loading models. Please check your Ollama installation.";
+                analyzeButton.disabled = true;
+            }
+        }
+
+        fetchModels();
+
+        async function toggleWebcam() {
+            if (isUsingWebcam) {
+                stopWebcam();
+            } else {
+                await startWebcam();
+            }
+        }
+
+        async function startWebcam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                capturedImage.style.display = 'none';
+                webcamButton.textContent = 'Stop Webcam';
+                isUsingWebcam = true;
+                video.play();
+            } catch (err) {
+                console.error("Error accessing the webcam", err);
+                alert("Error accessing the webcam. Please make sure you have given permission.");
+            }
+        }
+
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.style.display = 'none';
+                webcamButton.textContent = 'Use Webcam';
+                isUsingWebcam = false;
+            }
+        }
+
+        function getPrompt(task) {
+            switch (task) {
+                case 'general':
+                    return "Provide a general description of this image. Describe the main elements, scene, and any notable details.";
+                case 'objects':
+                    return "Identify and list the main objects in this image. Provide a brief description of each object's appearance and location.";
+                case 'people':
+                    return "Count the number of people in this image. Provide the total count and briefly describe their positions or activities.";
+                case 'faces':
+                    return "Detect and describe the faces in this image. Mention the number of faces, their expressions, and any notable features.";
+                case 'text':
+                    return "Identify and transcribe any text visible in this image. Provide the text content and its location in the image.";
+                case 'animals':
+                    return "Identify any animals in this image. Name the species if possible and describe their appearance and behavior.";
+                case 'landmarks':
+                    return "Identify any landmarks or notable locations in this image. Provide the name if known and describe its appearance.";
+                case 'colors':
+                    return "Analyze the colors in this image. Identify the dominant colors and describe the overall color palette.";
+                case 'brand':
+                    return "Detect any brand logos or product packaging in this image. Identify the brands and describe their appearance.";
+                case 'emotions':
+                    return "Analyze the emotions conveyed in this image. Describe the overall mood and any visible emotional expressions.";
+                case 'food':
+                    return "Identify any food items in this image. Name the dishes if possible and describe their appearance.";
+                case 'vehicle':
+                    return "Identify any vehicles in this image. Specify the type of vehicle, make/model if possible, and describe its appearance.";
+                case 'custom':
+                    return customQuery.value || "Please describe what you see in this image.";
+                default:
+                    return "Please describe what you see in this image.";
+            }
+        }
+
+        async function analyzeImage() {
+            const selectedModel = modelSelect.value;
+            if (!selectedModel) {
+                alert('Please select a LLaVA model.');
+                return;
+            }
+
+            // Clear previous results and set status to processing
+            resultDiv.textContent = '';
+            statusDiv.textContent = "Processing...";
+
+            let base64Image;
+            if (isUsingWebcam) {
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+                capturedImage.src = canvas.toDataURL('image/jpeg');
+                capturedImage.style.display = 'block';
+                video.style.display = 'none';
+                stopWebcam();
+            } else {
+                const file = imageInput.files[0];
+                if (!file) {
+                    alert('Please select an image or use the webcam.');
+                    statusDiv.textContent = "";
+                    return;
+                }
+                base64Image = await getBase64(file);
+                capturedImage.src = URL.createObjectURL(file);
+                capturedImage.style.display = 'block';
+            }
+
+            const prompt = getPrompt(taskSelect.value);
+
+            try {
+                const response = await fetch('http://localhost:11434/api/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: selectedModel,
+                        prompt: prompt,
+                        stream: false,
+                        images: [base64Image]
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                resultDiv.textContent = data.response;
+                statusDiv.textContent = "Analysis complete!";
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.textContent = `Error: ${error.message}`;
+                statusDiv.textContent = "An error occurred.";
+            }
+        }
+
+        function getBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+    </script>
+</body>
+
+</html>
