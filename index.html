@@ -1,355 +1,302 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Purpose Image Analysis App</title>
+    <title>Robust Calibration Burpee Counter</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
         }
-
-        #result,
-        #modelList {
-            margin-top: 20px;
-        }
-
-        #result {
-            white-space: pre-wrap;
-        }
-
-        #videoContainer,
-        #capturedImageContainer {
-            margin-top: 20px;
-            max-width: 100%;
+        .container {
             text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
         }
-
-        #status {
-            margin-top: 10px;
+        h1 {
+            margin-bottom: 1rem;
+        }
+        #count {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #reset {
+            background-color: #f44336;
+        }
+        #reset:hover {
+            background-color: #da190b;
+        }
+        #videoContainer {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 1rem auto;
+        }
+        #video, #canvasOutput {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        #canvasOutput {
+            z-index: 1;
+        }
+        #debugInfo {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+        #positionIndicator {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 1rem auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             font-weight: bold;
+            color: white;
         }
-
-        select,
-        button,
-        input {
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-
-        #savedQueriesContainer {
-            margin-top: 10px;
-        }
-
-        #savedQueries {
-            width: 200px;
-        }
-
-        #capturedImage {
-            max-width: 100%;
-            height: auto;
-            display: none;
+        #calibrationStatus {
+            margin-top: 1rem;
+            font-weight: bold;
         }
     </style>
 </head>
-
 <body>
-    <h1>Multi-Purpose Image Analysis App</h1>
-    <select id="modelSelect">
-        <option value="">Loading models...</option>
-    </select>
-    <select id="taskSelect">
-        <option value="general">General Description</option>
-        <option value="objects">Object Detection</option>
-        <option value="people">People Count</option>
-        <option value="faces">Face Detection</option>
-        <option value="text">Text Recognition (OCR)</option>
-        <option value="animals">Animal Identification</option>
-        <option value="landmarks">Landmark Recognition</option>
-        <option value="colors">Color Analysis</option>
-        <option value="brand">Brand/Logo Detection</option>
-        <option value="emotions">Emotion Recognition</option>
-        <option value="food">Food Detection</option>
-        <option value="vehicle">Vehicle Identification</option>
-        <option value="custom">Custom Query</option>
-    </select>
-    <div id="customQueryContainer" style="display:none;">
-        <input type="text" id="customQuery" placeholder="Enter custom query here">
-        <button id="saveQuery">Save Query</button>
-        <div id="savedQueriesContainer">
-            <select id="savedQueries">
-                <option value="">Select a saved query</option>
-            </select>
-            <button id="editQuery">Edit</button>
-            <button id="deleteQuery">Delete</button>
+    <div class="container">
+        <h1>Robust Calibration Burpee Counter</h1>
+        <div id="videoContainer">
+            <video id="video" playsinline></video>
+            <canvas id="canvasOutput"></canvas>
         </div>
+        <div id="count">0</div>
+        <div id="positionIndicator">Not Calibrated</div>
+        <div id="calibrationStatus"></div>
+        <button id="calibrate">Calibrate</button>
+        <button id="startStop" disabled>Start Detection</button>
+        <button id="reset">Reset</button>
+        <div id="debugInfo"></div>
     </div>
-    <input type="file" id="imageInput" accept="image/*">
-    <button id="webcamButton">Use Webcam</button>
-    <button id="analyzeButton">Analyze Image</button>
-    <div id="videoContainer">
-        <video id="video" width="640" height="480" style="display:none;"></video>
-        <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
-    </div>
-    <div id="capturedImageContainer">
-        <img id="capturedImage" alt="Captured Image">
-    </div>
-    <div id="status"></div>
-    <div id="result"></div>
 
     <script>
-        const modelSelect = document.getElementById('modelSelect');
-        const taskSelect = document.getElementById('taskSelect');
-        const customQueryContainer = document.getElementById('customQueryContainer');
-        const customQuery = document.getElementById('customQuery');
-        const saveQueryButton = document.getElementById('saveQuery');
-        const savedQueriesSelect = document.getElementById('savedQueries');
-        const editQueryButton = document.getElementById('editQuery');
-        const deleteQueryButton = document.getElementById('deleteQuery');
-        const imageInput = document.getElementById('imageInput');
-        const analyzeButton = document.getElementById('analyzeButton');
-        const webcamButton = document.getElementById('webcamButton');
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const capturedImage = document.getElementById('capturedImage');
-        const resultDiv = document.getElementById('result');
-        const statusDiv = document.getElementById('status');
+        let count = 0;
+        let isDetecting = false;
+        let isCalibrating = false;
+        let video, canvasOutput, ctx;
+        let standingHeight = 0;
+        let notStandingHeight = 0;
+        let isStanding = true;
+        let lastTransitionTime = 0;
+        const transitionCooldown = 1000; // 1 second cooldown between transitions
+        let calibrationStep = 0;
+        let calibrationTimer;
 
-        let isUsingWebcam = false;
-        let stream = null;
+        const countDisplay = document.getElementById('count');
+        const startStopButton = document.getElementById('startStop');
+        const calibrateButton = document.getElementById('calibrate');
+        const resetButton = document.getElementById('reset');
+        const debugInfo = document.getElementById('debugInfo');
+        const positionIndicator = document.getElementById('positionIndicator');
+        const calibrationStatus = document.getElementById('calibrationStatus');
 
-        analyzeButton.addEventListener('click', analyzeImage);
-        webcamButton.addEventListener('click', toggleWebcam);
-        taskSelect.addEventListener('change', toggleCustomQuery);
-        saveQueryButton.addEventListener('click', saveCustomQuery);
-        savedQueriesSelect.addEventListener('change', loadSavedQuery);
-        editQueryButton.addEventListener('click', editSavedQuery);
-        deleteQueryButton.addEventListener('click', deleteSavedQuery);
-
-        function toggleCustomQuery() {
-            customQueryContainer.style.display = taskSelect.value === 'custom' ? 'block' : 'none';
-            if (taskSelect.value === 'custom') {
-                loadSavedQueries();
-            }
+        function updateDisplay() {
+            countDisplay.textContent = count;
+            positionIndicator.textContent = isStanding ? 'Standing' : 'Not Standing';
+            positionIndicator.style.backgroundColor = isStanding ? '#4CAF50' : '#f44336';
         }
 
-        function saveCustomQuery() {
-            const query = customQuery.value.trim();
-            if (query) {
-                let savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-                savedQueries.push(query);
-                localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
-                loadSavedQueries();
-                customQuery.value = '';
-            }
-        }
-
-        function loadSavedQueries() {
-            const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-            savedQueriesSelect.innerHTML = '<option value="">Select a saved query</option>' +
-                savedQueries.map((query, index) => `<option value="${index}">${query.substring(0, 30)}${query.length > 30 ? '...' : ''}</option>`).join('');
-        }
-
-        function loadSavedQuery() {
-            const selectedIndex = savedQueriesSelect.value;
-            if (selectedIndex !== '') {
-                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-                customQuery.value = savedQueries[selectedIndex];
-            }
-        }
-
-        function editSavedQuery() {
-            const selectedIndex = savedQueriesSelect.value;
-            if (selectedIndex !== '') {
-                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-                const updatedQuery = prompt('Edit your query:', savedQueries[selectedIndex]);
-                if (updatedQuery !== null) {
-                    savedQueries[selectedIndex] = updatedQuery;
-                    localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
-                    loadSavedQueries();
-                    customQuery.value = updatedQuery;
-                }
-            }
-        }
-
-        function deleteSavedQuery() {
-            const selectedIndex = savedQueriesSelect.value;
-            if (selectedIndex !== '') {
-                const savedQueries = JSON.parse(localStorage.getItem('savedQueries') || '[]');
-                savedQueries.splice(selectedIndex, 1);
-                localStorage.setItem('savedQueries', JSON.stringify(savedQueries));
-                loadSavedQueries();
-                customQuery.value = '';
-            }
-        }
-
-        // Fetch available LLaVA models
-        async function fetchModels() {
-            try {
-                const response = await fetch('http://localhost:11434/api/tags');
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                const llavaModels = data.models.filter(model => model.name.toLowerCase().includes('llava'));
-
-                modelSelect.innerHTML = llavaModels.length > 0
-                    ? llavaModels.map(model => `<option value="${model.name}">${model.name}</option>`).join('')
-                    : '<option value="">No LLaVA models found</option>';
-
-                if (llavaModels.length === 0) {
-                    analyzeButton.disabled = true;
-                    statusDiv.textContent = "No LLaVA models available. Please install a LLaVA model to use this app.";
-                }
-            } catch (error) {
-                console.error('Error fetching models:', error);
-                modelSelect.innerHTML = '<option value="">Error loading models</option>';
-                statusDiv.textContent = "Error loading models. Please check your Ollama installation.";
-                analyzeButton.disabled = true;
-            }
-        }
-
-        fetchModels();
-
-        async function toggleWebcam() {
-            if (isUsingWebcam) {
-                stopWebcam();
-            } else {
-                await startWebcam();
-            }
-        }
-
-        async function startWebcam() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-                video.style.display = 'block';
-                capturedImage.style.display = 'none';
-                webcamButton.textContent = 'Stop Webcam';
-                isUsingWebcam = true;
+        function toggleDetection() {
+            isDetecting = !isDetecting;
+            startStopButton.textContent = isDetecting ? 'Stop Detection' : 'Start Detection';
+            if (isDetecting) {
                 video.play();
-            } catch (err) {
-                console.error("Error accessing the webcam", err);
-                alert("Error accessing the webcam. Please make sure you have given permission.");
-            }
-        }
-
-        function stopWebcam() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                video.style.display = 'none';
-                webcamButton.textContent = 'Use Webcam';
-                isUsingWebcam = false;
-            }
-        }
-
-        function getPrompt(task) {
-            switch (task) {
-                case 'general':
-                    return "Provide a general description of this image. Describe the main elements, scene, and any notable details.";
-                case 'objects':
-                    return "Identify and list the main objects in this image. Provide a brief description of each object's appearance and location.";
-                case 'people':
-                    return "Count the number of people in this image. Provide the total count and briefly describe their positions or activities.";
-                case 'faces':
-                    return "Detect and describe the faces in this image. Mention the number of faces, their expressions, and any notable features.";
-                case 'text':
-                    return "Identify and transcribe any text visible in this image. Provide the text content and its location in the image.";
-                case 'animals':
-                    return "Identify any animals in this image. Name the species if possible and describe their appearance and behavior.";
-                case 'landmarks':
-                    return "Identify any landmarks or notable locations in this image. Provide the name if known and describe its appearance.";
-                case 'colors':
-                    return "Analyze the colors in this image. Identify the dominant colors and describe the overall color palette.";
-                case 'brand':
-                    return "Detect any brand logos or product packaging in this image. Identify the brands and describe their appearance.";
-                case 'emotions':
-                    return "Analyze the emotions conveyed in this image. Describe the overall mood and any visible emotional expressions.";
-                case 'food':
-                    return "Identify any food items in this image. Name the dishes if possible and describe their appearance.";
-                case 'vehicle':
-                    return "Identify any vehicles in this image. Specify the type of vehicle, make/model if possible, and describe its appearance.";
-                case 'custom':
-                    return customQuery.value || "Please describe what you see in this image.";
-                default:
-                    return "Please describe what you see in this image.";
-            }
-        }
-
-        async function analyzeImage() {
-            const selectedModel = modelSelect.value;
-            if (!selectedModel) {
-                alert('Please select a LLaVA model.');
-                return;
-            }
-
-            // Clear previous results and set status to processing
-            resultDiv.textContent = '';
-            statusDiv.textContent = "Processing...";
-
-            let base64Image;
-            if (isUsingWebcam) {
-                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-                base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
-                capturedImage.src = canvas.toDataURL('image/jpeg');
-                capturedImage.style.display = 'block';
-                video.style.display = 'none';
-                stopWebcam();
+                detectPosition();
             } else {
-                const file = imageInput.files[0];
-                if (!file) {
-                    alert('Please select an image or use the webcam.');
-                    statusDiv.textContent = "";
-                    return;
-                }
-                base64Image = await getBase64(file);
-                capturedImage.src = URL.createObjectURL(file);
-                capturedImage.style.display = 'block';
+                video.pause();
             }
+        }
 
-            const prompt = getPrompt(taskSelect.value);
+        function resetCount() {
+            count = 0;
+            updateDisplay();
+        }
+
+        async function setupCamera() {
+            video = document.getElementById('video');
+            canvasOutput = document.getElementById('canvasOutput');
+            ctx = canvasOutput.getContext('2d');
 
             try {
-                const response = await fetch('http://localhost:11434/api/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        model: selectedModel,
-                        prompt: prompt,
-                        stream: false,
-                        images: [base64Image]
-                    }),
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        canvasOutput.width = video.videoWidth;
+                        canvasOutput.height = video.videoHeight;
+                        resolve();
+                    };
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                resultDiv.textContent = data.response;
-                statusDiv.textContent = "Analysis complete!";
             } catch (error) {
-                console.error('Error:', error);
-                resultDiv.textContent = `Error: ${error.message}`;
-                statusDiv.textContent = "An error occurred.";
+                throw new Error(`Camera access denied: ${error.message}. Please ensure you're running this on a web server and have granted camera permissions.`);
             }
         }
 
-        function getBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
-            });
+        function detectPosition() {
+            if (!isDetecting && !isCalibrating) return;
+
+            ctx.drawImage(video, 0, 0, canvasOutput.width, canvasOutput.height);
+            const frameData = ctx.getImageData(0, 0, canvasOutput.width, canvasOutput.height);
+
+            const topEdge = findTopEdge(frameData);
+            
+            if (isCalibrating) {
+                calibrate(topEdge);
+            } else {
+                checkPosition(topEdge);
+            }
+
+            updateDebugInfo(topEdge);
+            requestAnimationFrame(detectPosition);
         }
+
+        function findTopEdge(imageData) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const data = imageData.data;
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const index = (y * width + x) * 4;
+                    if (data[index] < 250 || data[index + 1] < 250 || data[index + 2] < 250) {
+                        return y;
+                    }
+                }
+            }
+            return height;
+        }
+
+        function calibrate(topEdge) {
+            if (calibrationStep === 0) {
+                standingHeight = topEdge;
+                calibrationStatus.textContent = "Now squat down";
+                calibrationStep = 1;
+                resetCalibrationTimer();
+            } else if (calibrationStep === 1) {
+                notStandingHeight = topEdge;
+                finishCalibration();
+            }
+        }
+
+        function resetCalibrationTimer() {
+            if (calibrationTimer) clearTimeout(calibrationTimer);
+            calibrationTimer = setTimeout(() => {
+                if (isCalibrating) {
+                    calibrationStatus.textContent = "Calibration timed out. Please try again.";
+                    isCalibrating = false;
+                    calibrationStep = 0;
+                    calibrateButton.disabled = false;
+                }
+            }, 10000); // 10 second timeout
+        }
+
+        function finishCalibration() {
+            isCalibrating = false;
+            calibrationStep = 0;
+            if (calibrationTimer) clearTimeout(calibrationTimer);
+            
+            if (Math.abs(standingHeight - notStandingHeight) < 20) {
+                calibrationStatus.textContent = "Calibration failed. Please try again with more distinct positions.";
+                standingHeight = 0;
+                notStandingHeight = 0;
+            } else {
+                calibrationStatus.textContent = "Calibration complete. You can start detection now.";
+                startStopButton.disabled = false;
+            }
+            
+            updateDisplay();
+            calibrateButton.disabled = false;
+        }
+
+        function checkPosition(topEdge) {
+            const threshold = (standingHeight + notStandingHeight) / 2;
+            const newPosition = topEdge < threshold;
+            
+            if (newPosition !== isStanding) {
+                const currentTime = Date.now();
+                if (currentTime - lastTransitionTime > transitionCooldown) {
+                    isStanding = newPosition;
+                    if (isStanding) {
+                        count++;
+                    }
+                    lastTransitionTime = currentTime;
+                    updateDisplay();
+                }
+            }
+        }
+
+        function updateDebugInfo(topEdge) {
+            debugInfo.innerHTML = `
+                Current Top Edge: ${topEdge}<br>
+                Standing Height: ${standingHeight}<br>
+                Not Standing Height: ${notStandingHeight}<br>
+                Is Standing: ${isStanding}<br>
+                Detection Status: ${isDetecting ? 'Running' : 'Stopped'}<br>
+                Calibration Step: ${calibrationStep}
+            `;
+        }
+
+        function startCalibration() {
+            isCalibrating = true;
+            calibrationStep = 0;
+            standingHeight = 0;
+            notStandingHeight = 0;
+            calibrationStatus.textContent = "Stand up straight";
+            calibrateButton.disabled = true;
+            video.play();
+            detectPosition();
+            resetCalibrationTimer();
+        }
+
+        startStopButton.addEventListener('click', toggleDetection);
+        resetButton.addEventListener('click', resetCount);
+        calibrateButton.addEventListener('click', startCalibration);
+
+        (async function init() {
+            try {
+                await setupCamera();
+                console.log('Camera setup complete');
+                calibrateButton.disabled = false;
+            } catch (error) {
+                console.error('Error setting up camera:', error);
+                calibrationStatus.textContent = error.message;
+                startStopButton.disabled = true;
+                calibrateButton.disabled = true;
+            }
+        })();
     </script>
 </body>
-
 </html>

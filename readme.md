@@ -109,5 +109,5 @@ SOFTWARE.
 - This application uses the Ollama API and LLaVA models.
 - Thanks to the open-source community for inspiration and resources.
 
-## Screenshoot
+## Screenshot
 ![Preview](preview.png)
